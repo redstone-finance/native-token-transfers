@@ -232,6 +232,7 @@ export class SolanaNttWormholeTransceiver<
     config: NttBindings.Config<IdlVersion>,
     wormholeMessage: PublicKey
   ): Promise<web3.TransactionInstruction> {
+    const [major, , ,] = parseVersion(this.version);
     const whAccs = utils.getWormholeDerivedAccounts(
       this.program.programId,
       this.manager.core.address
@@ -239,20 +240,22 @@ export class SolanaNttWormholeTransceiver<
 
     return this.program.methods
       .broadcastWormholeId()
-      .accountsStrict({
+      .accounts({
         payer,
         config: this.manager.pdas.configAccount(),
         mint: config.mint,
         wormholeMessage: wormholeMessage,
-        emitter: whAccs.wormholeEmitter,
+        ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         wormhole: {
           bridge: whAccs.wormholeBridge,
           feeCollector: whAccs.wormholeFeeCollector,
           sequence: whAccs.wormholeSequence,
           program: this.manager.core.address,
-          systemProgram: SystemProgram.programId,
-          clock: web3.SYSVAR_CLOCK_PUBKEY,
-          rent: web3.SYSVAR_RENT_PUBKEY,
+          // NOTE: transceivers accounts are added for versions >= 3.x.x
+          ...(major >= 3 && {
+            transceiver: this.program.programId,
+            emitter: whAccs.wormholeEmitter,
+          }),
         },
       })
       .instruction();
@@ -263,6 +266,7 @@ export class SolanaNttWormholeTransceiver<
     payer: PublicKey,
     wormholeMessage: PublicKey
   ): Promise<web3.TransactionInstruction> {
+    const [major, , ,] = parseVersion(this.version);
     const whAccs = utils.getWormholeDerivedAccounts(
       this.program.programId,
       this.manager.core.address
@@ -275,12 +279,17 @@ export class SolanaNttWormholeTransceiver<
         config: this.manager.pdas.configAccount(),
         peer: this.pdas.transceiverPeerAccount(chain),
         wormholeMessage: wormholeMessage,
-        emitter: whAccs.wormholeEmitter,
+        ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         wormhole: {
           bridge: whAccs.wormholeBridge,
           feeCollector: whAccs.wormholeFeeCollector,
           sequence: whAccs.wormholeSequence,
           program: this.manager.core.address,
+          // NOTE: transceivers accounts are added for versions >= 3.x.x
+          ...(major >= 3 && {
+            transceiver: this.program.programId,
+            emitter: whAccs.wormholeEmitter,
+          }),
         },
       })
       .instruction();
@@ -306,7 +315,7 @@ export class SolanaNttWormholeTransceiver<
         config: { config: this.manager.pdas.configAccount() },
         outboxItem,
         wormholeMessage: this.pdas.wormholeMessageAccount(outboxItem),
-        emitter: whAccs.wormholeEmitter,
+        ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         transceiver: this.manager.pdas.registeredTransceiver(
           this.program.programId
         ),
@@ -315,6 +324,11 @@ export class SolanaNttWormholeTransceiver<
           feeCollector: whAccs.wormholeFeeCollector,
           sequence: whAccs.wormholeSequence,
           program: this.manager.core.address,
+          // NOTE: transceivers accounts are added for versions >= 3.x.x
+          ...(major >= 3 && {
+            transceiver: this.program.programId,
+            emitter: whAccs.wormholeEmitter,
+          }),
         },
         // NOTE: baked-in transceiver case is handled separately
         // due to tx size error when LUT is not configured
@@ -382,8 +396,24 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
         const transceiverKey = new PublicKey(
           contracts.ntt!.transceiver[transceiverType]!
         );
-        // handle emitterAccount case separately
-        if (!PublicKey.isOnCurve(transceiverKey)) {
+
+        const [major, , ,] = parseVersion(version);
+        if (major >= 3) {
+          // major >= 3.x.x. => standalone transceiver
+          this.transceivers.push(
+            getTransceiverProgram(
+              connection,
+              contracts.ntt!.transceiver[transceiverType]!,
+              version as IdlVersion
+            )
+          );
+        } else {
+          // major < 3.x.x => emitterAccount (baked-in transceiver)
+          if (PublicKey.isOnCurve(transceiverKey)) {
+            throw new Error(
+              `Invalid transceiver emitter address: ${transceiverKey.toBase58()}`
+            );
+          }
           const whTransceiver = new SolanaNttWormholeTransceiver(
             this,
             getTransceiverProgram(
@@ -401,14 +431,6 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
             );
           }
           this.transceivers.push(whTransceiver.program);
-        } else {
-          this.transceivers.push(
-            getTransceiverProgram(
-              connection,
-              contracts.ntt!.transceiver[transceiverType]!,
-              version as IdlVersion
-            )
-          );
         }
       });
     }
@@ -653,6 +675,8 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
       },
       this.pdas
     );
+
+    console.log(ix.keys.map((val) => val.pubkey));
 
     const tx = new Transaction();
     tx.feePayer = payer;

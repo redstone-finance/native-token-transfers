@@ -248,17 +248,19 @@ export namespace NTT {
     },
     pdas?: Pdas
   ) {
-    const [major, , ,] = parseVersion(program.idl.version);
+    // const [major, , ,] = parseVersion(program.idl.version);
     const mode: any =
       args.mode === "burning" ? { burning: {} } : { locking: {} };
     const chainId = toChainId(args.chain);
 
     pdas = pdas ?? NTT.pdas(program.programId);
 
+    console.log("mult", args.multisigTokenAuthority);
+
     const limit = new BN(args.outboundLimit.toString());
     return program.methods
       .initialize({ chainId, limit: limit, mode })
-      .accounts({
+      .accountsStrict({
         payer: args.payer,
         deployer: args.owner,
         programData: programDataAddress(program.programId),
@@ -268,9 +270,9 @@ export namespace NTT {
         tokenProgram: args.tokenProgram,
         tokenAuthority: pdas.tokenAuthority(),
         // NOTE: SPL Multisig token authority is only supported for versions >= 3.x.x
-        ...(major >= 3 && {
-          multisigTokenAuthority: args.multisigTokenAuthority ?? null,
-        }),
+        // ...(major >= 3 && {
+        multisigTokenAuthority: null,
+        // }),
         custody: await NTT.custodyAccountAddress(
           pdas,
           args.mint,
@@ -315,7 +317,6 @@ export namespace NTT {
       args.wormholeId.toString()
     );
 
-    // TODO: add `whAccs.emitter`, `whTransceiver`, and transceiverEmitter PDA account to LUT
     const entries = {
       config: pdas.configAccount(),
       custody: config.custody,
@@ -331,6 +332,11 @@ export namespace NTT {
         systemProgram: SystemProgram.programId,
         clock: web3.SYSVAR_CLOCK_PUBKEY,
         rent: web3.SYSVAR_RENT_PUBKEY,
+        // NOTE: transceivers accounts are added for versions >= 3.x.x
+        ...(major >= 3 && {
+          transceiver: whTransceiver,
+          emitter: whAccs.wormholeEmitter,
+        }),
       },
     };
 

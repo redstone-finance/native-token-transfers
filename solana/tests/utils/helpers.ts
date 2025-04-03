@@ -11,7 +11,8 @@ import {
   UniversalAddress,
 } from "@wormhole-foundation/sdk";
 import { DummyTransferHook } from "../../ts/idl/1_0_0/ts/dummy_transfer_hook.js";
-import { derivePda } from "../../ts/lib/utils.js";
+import { derivePda, parseVersion } from "../../ts/lib/utils.js";
+import { IdlVersion } from "../../ts/index.js";
 
 export interface ErrorConstructor {
   new (...args: any[]): Error;
@@ -201,6 +202,35 @@ export class TestHelper {
       finality
     );
   }
+
+  /**
+   * Jest utility functions
+   */
+  jest = {
+    /**
+     * Executes describe block if condition is met; otherwise, skips it
+     * @param condition Condition to execute describe block
+     * @param args Arguments passed onto describe block
+     */
+    describeIf: (condition: boolean, ...args: Parameters<typeof describe>) =>
+      condition ? describe(...args) : describe.skip(...args),
+
+    /**
+     * Executes test block if condition is met; otherwise, skips it
+     * @param condition Condition to execute test block
+     * @param args Arguments passed onto test block
+     */
+    testIf: (condition: boolean, ...args: Parameters<typeof test>) =>
+      condition ? test(...args) : test.skip(...args),
+
+    /**
+     * Executes it block if condition is met; otherwise, skips it
+     * @param condition Condition to execute it block
+     * @param args Arguments passed onto it block
+     */
+    itIf: (condition: boolean, ...args: Parameters<typeof it>) =>
+      condition ? it(...args) : it.skip(...args),
+  };
 
   /**
    * `Keypair` utility functions
@@ -642,4 +672,27 @@ export const sendAndConfirm = async (
     [payer, ...signers],
     {}
   );
+};
+
+/**
+ * Minimum NTT manager major version for NTT feature to be supported
+ */
+export const NTTFeatureToMinimumMajorVersion = {
+  TransferMintAuthority: 3,
+  SplMultisig: 3,
+  StandaloneTransceiver: 3,
+} as const;
+
+/**
+ * Verifies if feature is available for given NTT Manager major version
+ * @param feature NTT Feature to check support for
+ * @param version IdlVersion of NTT Manager program
+ * @returns True if NTT Manager major version >= feature minimum major version
+ */
+export const isFeatureSupported = (
+  feature: keyof typeof NTTFeatureToMinimumMajorVersion,
+  version: IdlVersion
+) => {
+  const [major, , ,] = parseVersion(version);
+  return major >= NTTFeatureToMinimumMajorVersion[feature];
 };
