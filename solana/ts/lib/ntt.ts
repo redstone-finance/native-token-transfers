@@ -248,19 +248,17 @@ export namespace NTT {
     },
     pdas?: Pdas
   ) {
-    // const [major, , ,] = parseVersion(program.idl.version);
+    const [major, , ,] = parseVersion(program.idl.version);
     const mode: any =
       args.mode === "burning" ? { burning: {} } : { locking: {} };
     const chainId = toChainId(args.chain);
 
     pdas = pdas ?? NTT.pdas(program.programId);
 
-    console.log("mult", args.multisigTokenAuthority);
-
     const limit = new BN(args.outboundLimit.toString());
     return program.methods
       .initialize({ chainId, limit: limit, mode })
-      .accountsStrict({
+      .accounts({
         payer: args.payer,
         deployer: args.owner,
         programData: programDataAddress(program.programId),
@@ -270,9 +268,9 @@ export namespace NTT {
         tokenProgram: args.tokenProgram,
         tokenAuthority: pdas.tokenAuthority(),
         // NOTE: SPL Multisig token authority is only supported for versions >= 3.x.x
-        // ...(major >= 3 && {
-        multisigTokenAuthority: null,
-        // }),
+        ...(major >= 3 && {
+          multisigTokenAuthority: args.multisigTokenAuthority ?? null,
+        }),
         custody: await NTT.custodyAccountAddress(
           pdas,
           args.mint,

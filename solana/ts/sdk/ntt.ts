@@ -245,6 +245,7 @@ export class SolanaNttWormholeTransceiver<
         config: this.manager.pdas.configAccount(),
         mint: config.mint,
         wormholeMessage: wormholeMessage,
+        // NOTE: emitter is not part of wormhole accounts for versions < 3.x.x
         ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         wormhole: {
           bridge: whAccs.wormholeBridge,
@@ -279,6 +280,7 @@ export class SolanaNttWormholeTransceiver<
         config: this.manager.pdas.configAccount(),
         peer: this.pdas.transceiverPeerAccount(chain),
         wormholeMessage: wormholeMessage,
+        // NOTE: emitter is not part of wormhole accounts for versions < 3.x.x
         ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         wormhole: {
           bridge: whAccs.wormholeBridge,
@@ -315,6 +317,7 @@ export class SolanaNttWormholeTransceiver<
         config: { config: this.manager.pdas.configAccount() },
         outboxItem,
         wormholeMessage: this.pdas.wormholeMessageAccount(outboxItem),
+        // NOTE: emitter is not part of wormhole accounts for versions < 3.x.x
         ...(major < 3 && { emitter: whAccs.wormholeEmitter }),
         transceiver: this.manager.pdas.registeredTransceiver(
           this.program.programId
@@ -398,8 +401,8 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
         );
 
         const [major, , ,] = parseVersion(version);
+        // major >= 3.x.x. => standalone transceiver
         if (major >= 3) {
-          // major >= 3.x.x. => standalone transceiver
           this.transceivers.push(
             getTransceiverProgram(
               connection,
@@ -407,8 +410,9 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
               version as IdlVersion
             )
           );
-        } else {
-          // major < 3.x.x => emitterAccount (baked-in transceiver)
+        }
+        // major < 3.x.x => emitterAccount (baked-in transceiver)
+        else {
           if (PublicKey.isOnCurve(transceiverKey)) {
             throw new Error(
               `Invalid transceiver emitter address: ${transceiverKey.toBase58()}`
@@ -675,8 +679,6 @@ export class SolanaNtt<N extends Network, C extends SolanaChains>
       },
       this.pdas
     );
-
-    console.log(ix.keys.map((val) => val.pubkey));
 
     const tx = new Transaction();
     tx.feePayer = payer;
