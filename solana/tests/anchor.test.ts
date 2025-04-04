@@ -29,7 +29,6 @@ import {
   TestHelper,
   TestMint,
   assert,
-  isFeatureSupported,
   signSendWait,
 } from "./utils/helpers.js";
 
@@ -37,7 +36,7 @@ import {
  * Test Config Constants
  */
 const SOLANA_ROOT_DIR = `${__dirname}/../`;
-const VERSION: IdlVersion = "2.0.0";
+const VERSION: IdlVersion = "3.0.0";
 const TOKEN_PROGRAM = spl.TOKEN_2022_PROGRAM_ID;
 const GUARDIAN_KEY =
   "cfb12303a19cde580bb4dd771639b0d26bc68353645571a8cff516ab2ee113a0";
@@ -46,7 +45,7 @@ const NTT_ADDRESS: anchor.web3.PublicKey =
   anchor.workspace.ExampleNativeTokenTransfers.programId;
 const WH_TRANSCEIVER_ADDRESS: anchor.web3.PublicKey =
   anchor.workspace.NttTransceiver.programId;
-const TEST_SPL_MULTISIG = false; // only matters for VERSION >= 3.x.x
+const TEST_SPL_MULTISIG = true; // only matters for VERSION >= 3.x.x
 
 /**
  * Test Helpers
@@ -92,17 +91,8 @@ const remoteXcvr: ChainAddress = $.chainAddress.generateFromValue(
   "transceiver"
 );
 const nttTransceivers = {
-  wormhole: isFeatureSupported("StandaloneTransceiver", VERSION)
-    ? WH_TRANSCEIVER_ADDRESS
-    : NTT.transceiverPdas(NTT_ADDRESS.toBase58()).emitterAccount(),
+  wormhole: WH_TRANSCEIVER_ADDRESS,
 };
-console.log(NTT_ADDRESS.toBase58());
-console.log(WH_TRANSCEIVER_ADDRESS.toBase58());
-console.log("emit", nttTransceivers["wormhole"].toBase58());
-console.log(
-  "emit on curve",
-  anchor.web3.PublicKey.isOnCurve(nttTransceivers["wormhole"].toBase58())
-);
 
 describe("example-native-token-transfers", () => {
   let ntt: SolanaNtt<"Devnet", "Solana">;
@@ -164,8 +154,6 @@ describe("example-native-token-transfers", () => {
   });
 
   describe("Burning", () => {
-    const shouldTestSplMultisig =
-      isFeatureSupported("SplMultisig", VERSION) && TEST_SPL_MULTISIG;
     let multisigTokenAuthority: anchor.web3.PublicKey;
 
     beforeAll(async () => {
@@ -176,9 +164,7 @@ describe("example-native-token-transfers", () => {
       ]);
       await testMint.setMintAuthority(
         payer,
-        shouldTestSplMultisig
-          ? multisigTokenAuthority
-          : ntt.pdas.tokenAuthority(),
+        TEST_SPL_MULTISIG ? multisigTokenAuthority : ntt.pdas.tokenAuthority(),
         mintAuthority
       );
 
@@ -187,6 +173,9 @@ describe("example-native-token-transfers", () => {
         mint: testMint.address,
         outboundLimit: 1_000_000n,
         mode: "burning",
+        multisigTokenAuthority: TEST_SPL_MULTISIG
+          ? multisigTokenAuthority
+          : undefined,
       });
       await signSendWait(ctx, initTxs, signer);
 
@@ -262,8 +251,7 @@ describe("example-native-token-transfers", () => {
     });
 
     $.jest.describeIf(
-      isFeatureSupported("TransferMintAuthority", VERSION) &&
-        shouldTestSplMultisig,
+      TEST_SPL_MULTISIG,
       "Can transfer mint authority to-and-from NTT manager",
       () => {
         const newAuthority = $.keypair.generate();
@@ -534,7 +522,7 @@ describe("example-native-token-transfers", () => {
       assert.bn(await testDummyTransferHook.counter.value()).equal(2);
     });
 
-    $.jest.itIf(shouldTestSplMultisig, "Can mint independently", async () => {
+    $.jest.itIf(TEST_SPL_MULTISIG, "Can mint independently", async () => {
       const temp = await testMint.mint(
         payer,
         $.keypair.generate().publicKey,
@@ -591,22 +579,18 @@ describe("example-native-token-transfers", () => {
         expect(version).toBe("3.0.0");
       });
 
-      $.jest.testIf(
-        isFeatureSupported("StandaloneTransceiver", VERSION),
-        "It gets the correct transceiver type",
-        async () => {
-          const ntt = new SolanaNtt("Devnet", "Solana", $.connection, {
-            ...ctx.config.contracts,
-            ...{ ntt: overrides["Solana"] },
-          });
-          const whTransceiver = await ntt.getWormholeTransceiver();
-          expect(whTransceiver).toBeTruthy();
-          const transceiverType = await whTransceiver!.getTransceiverType(
-            payerAddress
-          );
-          expect(transceiverType).toBe("wormhole");
-        }
-      );
+      test("It gets the correct transceiver type", async () => {
+        const ntt = new SolanaNtt("Devnet", "Solana", $.connection, {
+          ...ctx.config.contracts,
+          ...{ ntt: overrides["Solana"] },
+        });
+        const whTransceiver = await ntt.getWormholeTransceiver();
+        expect(whTransceiver).toBeTruthy();
+        const transceiverType = await whTransceiver!.getTransceiverType(
+          payerAddress
+        );
+        expect(transceiverType).toBe("wormhole");
+      });
     });
   });
 });

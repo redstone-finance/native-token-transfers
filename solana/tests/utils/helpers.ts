@@ -11,8 +11,7 @@ import {
   UniversalAddress,
 } from "@wormhole-foundation/sdk";
 import { DummyTransferHook } from "../../ts/idl/1_0_0/ts/dummy_transfer_hook.js";
-import { derivePda, parseVersion } from "../../ts/lib/utils.js";
-import { IdlVersion } from "../../ts/index.js";
+import { derivePda } from "../../ts/lib/utils.js";
 
 export interface ErrorConstructor {
   new (...args: any[]): Error;
@@ -672,27 +671,4 @@ export const sendAndConfirm = async (
     [payer, ...signers],
     {}
   );
-};
-
-/**
- * Minimum NTT manager major version for NTT feature to be supported
- */
-export const NTTFeatureToMinimumMajorVersion = {
-  TransferMintAuthority: 3,
-  SplMultisig: 3,
-  StandaloneTransceiver: 3,
-} as const;
-
-/**
- * Verifies if feature is available for given NTT Manager major version
- * @param feature NTT Feature to check support for
- * @param version IdlVersion of NTT Manager program
- * @returns True if NTT Manager major version >= feature minimum major version
- */
-export const isFeatureSupported = (
-  feature: keyof typeof NTTFeatureToMinimumMajorVersion,
-  version: IdlVersion
-) => {
-  const [major, , ,] = parseVersion(version);
-  return major >= NTTFeatureToMinimumMajorVersion[feature];
 };
