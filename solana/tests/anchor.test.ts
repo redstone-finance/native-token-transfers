@@ -565,7 +565,6 @@ describe("example-native-token-transfers", () => {
         const ntt = new SolanaNtt("Devnet", "Solana", $.connection, {
           ...ctx.config.contracts,
           ...{ ntt: overrides["Solana"] },
-          // VERSION,
         });
         expect(ntt).toBeTruthy();
       });
